@@ -23,6 +23,7 @@ override.tf.json
 # その他一時ファイルやローカル設定ファイル
 *.log
 *.tmp
+*.txt
 
 # AWS CLIやSDKのキャッシュ、設定ファイル（必要に応じて）
 .aws/

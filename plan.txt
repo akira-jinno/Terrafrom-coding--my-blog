@@ -1,168 +1,440 @@
-module.vpc.data.aws_availability_zones.available: Reading...
-module.vpc.aws_vpc.this: Refreshing state... [id=vpc-087cdc74376eee8b8]
-module.s3.aws_s3_bucket.this: Refreshing state... [id=terraform-coding-my-blog-bucket]
-module.vpc.data.aws_availability_zones.available: Read complete after 0s [id=ap-northeast-1]
-module.s3.aws_s3_bucket_versioning.this: Refreshing state... [id=terraform-coding-my-blog-bucket]
-module.vpc.aws_internet_gateway.igw: Refreshing state... [id=igw-09a6f4ad53ae4afbf]
-module.vpc.aws_subnet.public[0]: Refreshing state... [id=subnet-043562c1b58aae03e]
-module.vpc.aws_subnet.public[1]: Refreshing state... [id=subnet-02c16c6b2778198d6]
-module.alb.aws_security_group.alb_sg: Refreshing state... [id=sg-0f6aad5621607a2b9]
-module.alb.aws_lb_target_group.this: Refreshing state... [id=arn:aws:elasticloadbalancing:ap-northeast-1:338200587558:targetgroup/tf-tg-blog/5a8892f5b83273df]
-module.vpc.aws_route_table.public: Refreshing state... [id=rtb-0e349645860dbc910]
-module.alb.aws_lb.this: Refreshing state... [id=arn:aws:elasticloadbalancing:ap-northeast-1:338200587558:loadbalancer/app/tf-alb-blog/805cef3f3d95691a]
-module.ec2.aws_instance.this: Refreshing state... [id=i-0a6bb155438bdb445]
-module.vpc.aws_route_table_association.public[1]: Refreshing state... [id=rtbassoc-0f86b9216d2ba5375]
-module.vpc.aws_route_table_association.public[0]: Refreshing state... [id=rtbassoc-0734b0e352c1a968e]
-module.alb.aws_lb_listener.this: Refreshing state... [id=arn:aws:elasticloadbalancing:ap-northeast-1:338200587558:listener/app/tf-alb-blog/805cef3f3d95691a/b9a864438df73632]
+【main.tf】
+provider "aws" {
+  region = var.region
+}
 
-Terraform used the selected providers to generate the following execution
-plan. Resource actions are indicated with the following symbols:
-  + create
--/+ destroy and then create replacement
+module "vpc" {
+  source    = "./modules/vpc"
+  vpc_cidr  = var.vpc_cidr
+}
 
-Terraform will perform the following actions:
+module "ec2" {
+  source        = "./modules/ec2"
+  ami_id        = var.ami_id
+  instance_type = var.instance_type
+  subnet_id     = module.vpc.public_subnet_id
+}
 
-  # module.ec2.aws_eip.this will be created
-  + resource "aws_eip" "this" {
-      + allocation_id        = (known after apply)
-      + arn                  = (known after apply)
-      + association_id       = (known after apply)
-      + carrier_ip           = (known after apply)
-      + customer_owned_ip    = (known after apply)
-      + domain               = (known after apply)
-      + id                   = (known after apply)
-      + instance             = (known after apply)
-      + ipam_pool_id         = (known after apply)
-      + network_border_group = (known after apply)
-      + network_interface    = (known after apply)
-      + private_dns          = (known after apply)
-      + private_ip           = (known after apply)
-      + ptr_record           = (known after apply)
-      + public_dns           = (known after apply)
-      + public_ip            = (known after apply)
-      + public_ipv4_pool     = (known after apply)
-      + tags_all             = (known after apply)
-      + vpc                  = (known after apply)
+module "alb" {
+  source     = "./modules/alb"
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.public_subnet_ids
+}
+
+module "s3" {
+  source      = "./modules/s3"
+  bucket_name = var.bucket_name
+}
+
+
+ーーーーーーーーーーーーーー
+【output.tf】
+output "vpc_id" {
+  description = "作成したVPCのID"
+  value       = module.vpc.vpc_id
+}
+
+# output "ec2_public_ip" {
+#   description = "EC2インスタンスのパブリックIP"
+#   value       = module.ec2.public_ip
+# }
+
+output "alb_dns_name" {
+  description = "ALBのDNS名"
+  value       = module.alb.alb_dns_name
+}
+
+output "s3_bucket_arn" {
+  description = "S3バケットのARN"
+  value       = module.s3.bucket_arn
+}
+
+output "ec2_public_ip" {
+  description = "EC2インスタンスのElastic IP"
+  value       = module.ec2.elastic_ip
+}
+
+
+
+ーーーーーーーーーーーーーー
+【variables.tf】
+variable "region" {
+  description = "AWSリージョン"
+  type        = string
+  default     = "ap-northeast-1"
+}
+
+variable "vpc_cidr" {
+  description = "VPCのCIDRブロック"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "ami_id" {
+  description = "EC2用のAMI ID（既存のブログイメージをAMI化して指定）"
+  type        = string
+}
+
+variable "instance_type" {
+  description = "EC2のインスタンスタイプ"
+  type        = string
+  default     = "t2.micro"
+}
+
+variable "bucket_name" {
+  description = "S3バケットの名前"
+  type        = string
+  default     = "tf-coding-my-blog-bucket"
+}
+
+
+
+ーーーーーーーーーーーーーー
+【terraform.tfvars】
+region        = "ap-northeast-1"
+vpc_cidr      = "10.1.0.0/16"
+ami_id        = "ami-076b729e27f068c4b"  # 既存ブログのAMI IDに置き換え
+instance_type = "t2.micro"
+bucket_name   = "terraform-coding-my-blog-bucket"
+
+
+
+
+ーーーーーーーーーーーーーー
+【./modules/alb/main.tf】
+resource "aws_security_group" "alb_sg" {
+  name        = "tf-alb-sg"
+  description = "Security group for ALB"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_lb" "this" {
+  name               = "tf-alb-blog"
+  internal           = false
+  load_balancer_type = "application"
+  subnets            = var.subnet_ids
+  security_groups    = [aws_security_group.alb_sg.id]
+
+  tags = {
+    Name = "tf-alb-blog"
+  }
+}
+
+resource "aws_lb_target_group" "this" {
+  name     = "tf-tg-blog"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+
+  health_check {
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    path                = "/"
+    matcher             = "200"
+  }
+}
+
+resource "aws_lb_listener" "this" {
+  load_balancer_arn = aws_lb.this.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.this.arn
+  }
+}
+
+
+
+
+ーーーーーーーーーーーーーー
+【./modules/alb/outputs.tf】
+output "alb_dns_name" {
+  description = "ALBのDNS名"
+  value       = aws_lb.this.dns_name
+}
+
+
+
+
+ーーーーーーーーーーーーーー
+【./modules/alb/variables.tf】
+variable "vpc_id" {
+  description = "ALBを配置するVPCのID"
+  type        = string
+}
+
+variable "subnet_ids" {
+  description = "ALBを配置するサブネットのIDリスト"
+  type        = list(string)
+}
+
+
+
+
+ーーーーーーーーーーーーーー
+【./modules/ec2/main.tf】
+
+resource "aws_instance" "this" {
+  ami                         = var.ami_id
+  instance_type               = var.instance_type
+  subnet_id                   = var.subnet_id
+  associate_public_ip_address = false
+
+  # ★ ここでスポットインスタンスとして起動するオプションを指定
+  instance_market_options {
+    market_type = "spot"
+    spot_options {
+      max_price = var.spot_price
     }
+  }
 
-  # module.ec2.aws_instance.this must be replaced
--/+ resource "aws_instance" "this" {
-      ~ arn                                  = "arn:aws:ec2:ap-northeast-1:338200587558:instance/i-0a6bb155438bdb445" -> (known after apply)
-      ~ associate_public_ip_address          = true -> false # forces replacement
-      ~ availability_zone                    = "ap-northeast-1a" -> (known after apply)
-      ~ cpu_core_count                       = 1 -> (known after apply)
-      ~ cpu_threads_per_core                 = 1 -> (known after apply)
-      ~ disable_api_stop                     = false -> (known after apply)
-      ~ disable_api_termination              = false -> (known after apply)
-      ~ ebs_optimized                        = false -> (known after apply)
-      + enable_primary_ipv6                  = (known after apply)
-      - hibernation                          = false -> null
-      + host_id                              = (known after apply)
-      + host_resource_group_arn              = (known after apply)
-      + iam_instance_profile                 = (known after apply)
-      ~ id                                   = "i-0a6bb155438bdb445" -> (known after apply)
-      ~ instance_initiated_shutdown_behavior = "stop" -> (known after apply)
-      + instance_lifecycle                   = (known after apply)
-      ~ instance_state                       = "running" -> (known after apply)
-      ~ ipv6_address_count                   = 0 -> (known after apply)
-      ~ ipv6_addresses                       = [] -> (known after apply)
-      + key_name                             = (known after apply)
-      ~ monitoring                           = false -> (known after apply)
-      + outpost_arn                          = (known after apply)
-      + password_data                        = (known after apply)
-      + placement_group                      = (known after apply)
-      ~ placement_partition_number           = 0 -> (known after apply)
-      ~ primary_network_interface_id         = "eni-0531e19eb37ba2df4" -> (known after apply)
-      ~ private_dns                          = "ip-10-1-0-32.ap-northeast-1.compute.internal" -> (known after apply)
-      ~ private_ip                           = "10.1.0.32" -> (known after apply)
-      ~ public_dns                           = "ec2-52-198-6-27.ap-northeast-1.compute.amazonaws.com" -> (known after apply)
-      ~ public_ip                            = "52.198.6.27" -> (known after apply)
-      ~ secondary_private_ips                = [] -> (known after apply)
-      ~ security_groups                      = [] -> (known after apply)
-      + spot_instance_request_id             = (known after apply)
-        tags                                 = {
-            "Name" = "tf-ec2-blog"
-        }
-      ~ tenancy                              = "default" -> (known after apply)
-      + user_data                            = (known after apply)
-      + user_data_base64                     = (known after apply)
-      ~ vpc_security_group_ids               = [
-          - "sg-0e486dae1277a1c5b",
-        ] -> (known after apply)
-        # (7 unchanged attributes hidden)
+  tags = {
+    Name = "tf-ec2-blog-spot"
+  }
+}
 
-      ~ capacity_reservation_specification (known after apply)
-      - capacity_reservation_specification {
-          - capacity_reservation_preference = "open" -> null
-        }
+resource "aws_eip" "this" {
+  instance = aws_instance.this.id
 
-      ~ cpu_options (known after apply)
-      - cpu_options {
-          - core_count       = 1 -> null
-          - threads_per_core = 1 -> null
-            # (1 unchanged attribute hidden)
-        }
+  tags = {
+    Name = "tf-ec2-elastic-ip"
+  }
+}
 
-      - credit_specification {
-          - cpu_credits = "standard" -> null
-        }
 
-      ~ ebs_block_device (known after apply)
 
-      ~ enclave_options (known after apply)
-      - enclave_options {
-          - enabled = false -> null
-        }
+ーーーーーーーーーーーーーー
+【./modules/ec2/outputs.tf】
 
-      ~ ephemeral_block_device (known after apply)
+output "instance_id" {
+  description = "EC2インスタンスのID"
+  value       = aws_instance.this.id
+}
 
-      ~ instance_market_options (known after apply)
+output "elastic_ip" {
+  description = "Elastic IPアドレス"
+  value       = aws_eip.this.public_ip
+}
 
-      ~ maintenance_options (known after apply)
-      - maintenance_options {
-          - auto_recovery = "default" -> null
-        }
 
-      ~ metadata_options (known after apply)
-      - metadata_options {
-          - http_endpoint               = "enabled" -> null
-          - http_protocol_ipv6          = "disabled" -> null
-          - http_put_response_hop_limit = 2 -> null
-          - http_tokens                 = "required" -> null
-          - instance_metadata_tags      = "disabled" -> null
-        }
 
-      ~ network_interface (known after apply)
 
-      ~ private_dns_name_options (known after apply)
-      - private_dns_name_options {
-          - enable_resource_name_dns_a_record    = false -> null
-          - enable_resource_name_dns_aaaa_record = false -> null
-          - hostname_type                        = "ip-name" -> null
-        }
+ーーーーーーーーーーーーーー
+【./modules/ec2/variables.tf】
 
-      ~ root_block_device (known after apply)
-      - root_block_device {
-          - delete_on_termination = true -> null
-          - device_name           = "/dev/xvda" -> null
-          - encrypted             = false -> null
-          - iops                  = 3000 -> null
-          - tags                  = {} -> null
-          - tags_all              = {} -> null
-          - throughput            = 125 -> null
-          - volume_id             = "vol-0d7468282031798ca" -> null
-          - volume_size           = 8 -> null
-          - volume_type           = "gp3" -> null
-            # (1 unchanged attribute hidden)
-        }
-    }
+variable "ami_id" {
+  description = "EC2で利用するAMI ID"
+  type        = string
+}
 
-Plan: 2 to add, 0 to change, 1 to destroy.
+variable "instance_type" {
+  description = "EC2のインスタンスタイプ"
+  type        = string
+}
 
-Changes to Outputs:
-  ~ ec2_public_ip = "52.198.6.27" -> (known after apply)
+# スポットインスタンス用の最大入札価格（USD）
+variable "spot_price" {
+  description = "スポットインスタンスの最大入札価格 (USD)"
+  type        = string
+  default     = "0.005"  # 必要に応じて調整してください
+}
 
-─────────────────────────────────────────────────────────────────────────────
+variable "subnet_id" {
+  description = "EC2を配置するサブネットのID"
+  type        = string
+}
 
-Note: You didn't use the -out option to save this plan, so Terraform can't
-guarantee to take exactly these actions if you run "terraform apply" now.
+
+
+ーーーーーーーーーーーーーー
+【./modules/s3/main.tf】
+
+resource "aws_s3_bucket" "this" {
+  bucket = var.bucket_name
+
+  tags = {
+    Name = "tf-s3-blog"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+
+
+ーーーーーーーーーーーーーー
+【./modules/s3/outputs.tf】
+
+output "bucket_arn" {
+  description = "S3バケットのARN"
+  value       = aws_s3_bucket.this.arn
+}
+
+
+
+
+ーーーーーーーーーーーーーー
+【./modules/s3/variables.tf】
+
+variable "bucket_name" {
+  description = "S3バケットの名前"
+  type        = string
+}
+
+
+
+
+ーーーーーーーーーーーーーー
+【./modules/vpc/main.tf】
+
+resource "aws_vpc" "this" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = "tf-vpc"
+  }
+}
+
+# インターネットゲートウェイを追加
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.this.id
+
+  tags = {
+    Name = "tf-vpc-igw"
+  }
+}
+
+data "aws_availability_zones" "available" {}
+
+resource "aws_subnet" "public" {
+  count                   = 2
+  vpc_id                  = aws_vpc.this.id
+  cidr_block              = cidrsubnet(aws_vpc.this.cidr_block, 8, count.index)
+  availability_zone       = element(data.aws_availability_zones.available.names, count.index)
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "tf-public-subnet-${count.index + 1}"
+  }
+}
+
+# パブリックサブネット用ルートテーブル
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.this.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = {
+    Name = "tf-public-rt"
+  }
+}
+
+# 各パブリックサブネットにルートテーブルを関連付け
+resource "aws_route_table_association" "public" {
+  count          = length(aws_subnet.public)
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# ★ セキュリティグループの定義を追加 ★
+resource "aws_security_group" "default" {
+  name        = "tf-default-sg"
+  description = "Default security group for tf-vpc"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description = "Allow HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Allow HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Allow SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "tf-default-sg"
+  }
+}
+
+
+ーーーーーーーーーーーーーー
+【./modules/vpc/outputs.tf】
+
+output "vpc_id" {
+  description = "VPCのID"
+  value       = aws_vpc.this.id
+}
+
+output "public_subnet_ids" {
+  description = "作成したパブリックサブネットのIDリスト"
+  value       = aws_subnet.public[*].id
+}
+
+output "public_subnet_id" {
+  description = "利用するパブリックサブネット（先頭の1件）"
+  value       = aws_subnet.public[0].id
+}
+
+
+
+
+ーーーーーーーーーーーーーー
+【./modules/vpc/variables.tf】
+
+variable "vpc_cidr" {
+  description = "VPCのCIDRブロック"
+  type        = string
+}
+
+
+ーーーーーーーーーーーーーー
