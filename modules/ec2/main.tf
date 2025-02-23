@@ -1,22 +1,19 @@
-# resource "aws_instance" "this" {
-#   ami                    = var.ami_id
-#   instance_type          = var.instance_type
-#   subnet_id              = var.subnet_id
-#   associate_public_ip_address = true
-
-#   tags = {
-#     Name = "tf-ec2-blog"
-#   }
-# }
-
 resource "aws_instance" "this" {
   ami                         = var.ami_id
   instance_type               = var.instance_type
   subnet_id                   = var.subnet_id
   associate_public_ip_address = false
 
+  # ★ ここでスポットインスタンスとして起動するオプションを指定
+  instance_market_options {
+    market_type = "spot"
+    spot_options {
+      max_price = var.spot_price
+    }
+  }
+
   tags = {
-    Name = "tf-ec2-blog"
+    Name = "tf-ec2-blog-spot"
   }
 }
 

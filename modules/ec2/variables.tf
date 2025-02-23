@@ -8,6 +8,13 @@ variable "instance_type" {
   type        = string
 }
 
+# スポットインスタンス用の最大入札価格（USD）
+variable "spot_price" {
+  description = "スポットインスタンスの最大入札価格 (USD)"
+  type        = string
+  default     = "0.005"  # 必要に応じて調整してください
+}
+
 variable "subnet_id" {
   description = "EC2を配置するサブネットのID"
   type        = string
