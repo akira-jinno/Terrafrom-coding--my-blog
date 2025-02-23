@@ -1,0 +1,28 @@
+# Terraformの実行ディレクトリ
+.terraform/
+.terraform/*
+
+# ロックファイル（Terraform 0.14以降）
+.terraform.lock.hcl
+
+# Terraform状態ファイルとバックアップ（機密情報が含まれるため）
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Terraformのoverrideファイル（ローカル設定用。例: override.tf, *_override.tf.jsonなど）
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# 変数ファイル（機密情報が入る可能性があるため）
+*.tfvars
+!example.tfvars   # example.tfvarsはサンプルとして残す
+
+# その他一時ファイルやローカル設定ファイル
+*.log
+*.tmp
+
+# AWS CLIやSDKのキャッシュ、設定ファイル（必要に応じて）
+.aws/
